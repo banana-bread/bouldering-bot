@@ -1,16 +1,31 @@
-require('dotenv').config()
 const puppeteer = require('puppeteer')
 const moment = require('moment')
-moment().format()
 const axios = require('axios')
+moment().format()
+require('dotenv').config()
 
 const bot = { 
     browser: null,
     page: null,
     
     async init() {
-        bot.browser = await puppeteer.launch({headless: false})
+        bot.browser = await puppeteer.launch(
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            '--disable-setuid-sandbox',
+            '--timeout=30000',
+            '--no-first-run',
+            '--no-sandbox',
+            '--no-zygote',
+            '--single-process',
+            "--proxy-server='direct://'",
+            '--proxy-bypass-list=*',
+            '--deterministic-fetch',
+        )
         bot.page = await bot.browser.newPage()
+        bot.page.setUserAgent(
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36'
+        )
     },
 
     async goToSchedule() {
@@ -91,7 +106,7 @@ const bot = {
             })
     
             addButton.click()
- 
+
             // Get schedule table
             const getTableBody = () => {
                 return [...document.querySelectorAll('tbody')].find(body => { 
@@ -165,6 +180,7 @@ const bot = {
             iAgreeCheck.click()
 
         }, bookingDetails)
+        console.log('made it here no errors should be fine now')
     },
 
     async solveCaptcha(solveCaptchaDetails) {
@@ -174,58 +190,51 @@ const bot = {
         const captchaId = response.data.replace(/\D/g,'')
 
         setTimeout( async () => {
-            const response = await axios.get(`http://2captcha.com/res.php?key=${captchaApiKey}&action=get&id=${captchaId}`)
+            let response = await axios.get(`http://2captcha.com/res.php?key=${captchaApiKey}&action=get&id=${captchaId}`)
+            
+            // try again if capcha still not ready after 1 minute
+            if ( response.data.includes('CAPCHA_NOT_READY') ) {
+                setTimeout(async () => response = await axios.get(`http://2captcha.com/res.php?key=${captchaApiKey}&action=get&id=${captchaId}`), 20000)
+            }
+            
             const captchaAnswer = response.data.slice(3)
             
-
+            
             await bot.page.evaluate(captchaAnswer => {
-               const confirmBookingButton =  document.querySelector('a#confirm_booking_button')
-               const solveCaptchaTextArea = document.querySelector('textarea#g-recaptcha-response')
-               solveCaptchaTextArea.value = captchaAnswer
-            //    confirmBookingButton.click()
-               console.log(solveCaptchaTextArea.value)
+                const confirmBookingButton =  document.querySelector('a#confirm_booking_button')
+                const solveCaptchaTextArea = document.querySelector('textarea#g-recaptcha-response')
+                
+                solveCaptchaTextArea.value = captchaAnswer
+                confirmBookingButton.click()
+                
             }, captchaAnswer)
-
         }, 60000)
+    },
 
-        // run chron job every monday, wednesday and sturday at noon: 0 12 * * 1,3,6
+    async close() {
+        await bot.page.close();
+        await bot.browser.close();  
     }
+}   
 
-}    
-
-
-const doIt = async () => {
-    const { 
-        FIRST_NAME, 
-        LAST_NAME, 
-        EMAIL,
-        PHONE, 
-        BIRTH_MONTH, 
-        BIRTH_YEAR, 
-        BIRTH_DAY,
-        MEMBER_ID,
-        SITE_KEY,
-        CAPTCHA_API_KEY,
-        CAPTCHA_URL
-    } = process.env
-
+const bookSession = async () => {
     const bookingDetails = {
         date: moment().add(3, 'd').toDate().getDate(),
         time: moment().day() === 3 ? '09:20' : '18:40',
-        firstName: FIRST_NAME,
-        lastName: LAST_NAME,
-        email: EMAIL,
-        phone: PHONE,
-        birthMonth: BIRTH_MONTH,
-        birthYear: BIRTH_YEAR,
-        birthDay: BIRTH_DAY,
-        memberId: MEMBER_ID
+        firstName: process.env.FIRST_NAME,
+        lastName: process.env.LAST_NAME,
+        email: process.env.EMAIL,
+        phone: process.env.PHONE,
+        birthMonth: process.env.BIRTH_MONTH,
+        birthYear: process.env.BIRTH_YEAR,
+        birthDay: process.env.BIRTH_DAY,
+        memberId: process.env.MEMBER_ID
     }
 
     const solveCaptchaDetails = {
-        siteKey: SITE_KEY,
-        captchaApiKey: CAPTCHA_API_KEY,
-        captchaUrl: CAPTCHA_URL
+        siteKey: process.env.SITE_KEY,
+        captchaApiKey: process.env.CAPTCHA_API_KEY,
+        captchaUrl: process.env.CAPTCHA_URL
     }
 
     await bot.init()
@@ -236,4 +245,18 @@ const doIt = async () => {
     await bot.solveCaptcha(solveCaptchaDetails)
 }
 
-doIt()
+exports.boulderingBot = async (req, res) => {
+    try
+    {
+        await bookSession()
+        res.status(200).send('booked!');
+    }
+    catch (err)
+    {
+        res.status(500).send(err.message)
+    }
+    finally
+    {
+        await bot.close()
+    }
+}
