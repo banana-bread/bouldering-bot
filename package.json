@@ -1,0 +1,18 @@
+{
+  "name": "climbing_bot",
+  "version": "1.0.0",
+  "description": "A bot to automate booking climbing sessions.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Adriano Dramisino",
+  "license": "ISC",
+  "dependencies": {
+    "2captcha-node": "^2.2.0",
+    "axios": "^0.21.0",
+    "dotenv": "^8.2.0",
+    "moment": "^2.29.1",
+    "puppeteer": "^5.4.1"
+  }
+}
