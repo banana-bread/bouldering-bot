@@ -9,10 +9,9 @@
   "author": "Adriano Dramisino",
   "license": "ISC",
   "dependencies": {
-    "2captcha-node": "^2.2.0",
     "axios": "^0.21.0",
     "dotenv": "^8.2.0",
     "moment": "^2.29.1",
-    "puppeteer": "^5.4.1"
+    "puppeteer": "2.1.1"
   }
 }
